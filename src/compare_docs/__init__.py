@@ -1,0 +1,1 @@
+from .core import get_structured_diff, compare_files
