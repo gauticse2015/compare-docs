@@ -1,4 +1,5 @@
-# Compare Docs
+# compare-docs
+This tool is to compare two docs and find a diff between them
 
 A Python tool and backend API service to compare documents/files (text, code, JSON, DOCX) and identify differences with severity levels (WARNING, ERROR, CRITICAL).
 
