@@ -1,10 +1,11 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 import sys
 import os
 import json
+import tempfile
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -46,9 +47,9 @@ app.add_middleware(
 )
 
 class CompareRequest(BaseModel):
-    input1: str
-    input2: str
-    input_mode: str = 'path'  # 'path' or 'content'
+    input1: Optional[str] = None
+    input2: Optional[str] = None
+    input_mode: str = 'content'  # 'content' or 'path'
     file_type: Optional[str] = None
 
 class RegisterRequest(BaseModel):
@@ -69,6 +70,10 @@ class HistoryItem(BaseModel):
     rightContent: str
     result: Dict
     timestamp: str
+
+class SaveHistoryRequest(BaseModel):
+    email: str
+    history: HistoryItem
 
 @app.post("/register")
 def register(user: RegisterRequest):
@@ -98,11 +103,12 @@ def reset_password(req: ResetRequest):
     return {"message": "Password reset successfully"}
 
 @app.post("/save-history")
-def save_history(email: str, history: HistoryItem):
+def save_history(request: SaveHistoryRequest):
     histories = load_histories()
+    email = request.email
     if email not in histories:
         histories[email] = []
-    histories[email].append(history.dict())
+    histories[email].append(request.history.dict())
     save_histories(histories)
     return {"message": "History saved"}
 
@@ -112,15 +118,34 @@ def get_history(email: str):
     return histories.get(email, [])
 
 @app.post("/compare")
-def compare_docs_api(request: CompareRequest):
+def compare_docs_api(
+    input1: Optional[str] = None,
+    input2: Optional[str] = None,
+    file1: Optional[UploadFile] = File(None),
+    file2: Optional[UploadFile] = File(None),
+    input_mode: str = 'content',
+    file_type: Optional[str] = None
+):
     try:
-        result = get_structured_diff(
-            request.input1, 
-            request.input2, 
-            input_mode=request.input_mode, 
-            file_type=request.file_type
-        )
-        return result
+        if file1 and file2:
+            # Save uploaded files to temp
+            with tempfile.NamedTemporaryFile(delete=False) as temp1:
+                temp1.write(file1.file.read())
+                temp1_path = temp1.name
+            with tempfile.NamedTemporaryFile(delete=False) as temp2:
+                temp2.write(file2.file.read())
+                temp2_path = temp2.name
+            try:
+                result = get_structured_diff(temp1_path, temp2_path, input_mode='path', file_type=file_type)
+            finally:
+                os.unlink(temp1_path)
+                os.unlink(temp2_path)
+            return result
+        elif input1 and input2:
+            result = get_structured_diff(input1, input2, input_mode='content', file_type=file_type)
+            return result
+        else:
+            raise HTTPException(status_code=400, detail="Provide either files or content")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

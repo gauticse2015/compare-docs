@@ -1,1 +1,4 @@
-Hello World
+
+SSH_PORT=2222
+TUTOR_NAME="GautamKumar"
+PROJECT_ID="p-WSpCWGptzH60ooRHZgs69"

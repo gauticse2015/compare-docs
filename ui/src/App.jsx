@@ -6,6 +6,10 @@ function App() {
   const [currentView, setCurrentView] = useState('login')
   const [leftContent, setLeftContent] = useState('')
   const [rightContent, setRightContent] = useState('')
+  const [leftFile, setLeftFile] = useState(null)
+  const [rightFile, setRightFile] = useState(null)
+  const [leftFileType, setLeftFileType] = useState('text')
+  const [rightFileType, setRightFileType] = useState('text')
   const [diffResult, setDiffResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [histories, setHistories] = useState([])
@@ -48,31 +52,73 @@ function App() {
   const handleFileUpload = (e, side) => {
     const file = e.target.files[0]
     if (file) {
+      if (side === 'left') {
+        setLeftFile(file)
+      } else {
+        setRightFile(file)
+      }
       const reader = new FileReader()
       reader.onload = (event) => {
+        const content = event.target.result
+        const fileType = detectFileType(content, file.name)
         if (side === 'left') {
-          setLeftContent(event.target.result)
+          setLeftContent(content)
+          setLeftFileType(fileType)
         } else {
-          setRightContent(event.target.result)
+          setRightContent(content)
+          setRightFileType(fileType)
         }
       }
       reader.readAsText(file)
     }
   }
 
+  const detectFileType = (content, fileName = null) => {
+    if (fileName && fileName.endsWith('.json')) {
+      return 'json'
+    }
+    try {
+      JSON.parse(content)
+      return 'json'
+    } catch {
+      return 'text'
+    }
+  }
+
   const handleCompare = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/api/compare', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input1: leftContent,
-          input2: rightContent,
-          input_mode: 'content'
-          // file_type omitted for auto
+      let response
+      if (leftFile && rightFile) {
+        // Send files
+        const formData = new FormData()
+        formData.append('file1', leftFile)
+        formData.append('file2', rightFile)
+        formData.append('input_mode', 'path')
+        const fileType1 = detectFileType(leftContent)
+        const fileType2 = detectFileType(rightContent)
+        const fileType = fileType1 === fileType2 ? fileType1 : 'text'
+        formData.append('file_type', fileType)
+        response = await fetch('/api/compare', {
+          method: 'POST',
+          body: formData
         })
-      })
+      } else {
+        // Send content
+        const fileType1 = detectFileType(leftContent)
+        const fileType2 = detectFileType(rightContent)
+        const fileType = fileType1 === fileType2 ? fileType1 : 'text'
+        response = await fetch('/api/compare', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            input1: leftContent,
+            input2: rightContent,
+            input_mode: 'content',
+            file_type: fileType
+          })
+        })
+      }
       const result = await response.json()
       setDiffResult(result)
       // Save to history
@@ -88,7 +134,7 @@ function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             email: currentUser.email,
-            ...newHistory
+            history: newHistory
           })
         })
         .then(() => {
@@ -114,10 +160,12 @@ function App() {
         {lines.map((line, idx) => {
           const lineNum = idx + 1
           let bgColor = 'transparent'
-          const matchingDiff = diffResult.diffs.find(d =>
-            d.location.includes(`Line ${lineNum}`) &&
-            (side === 'left' || true) // simplistic, match both for now
-          )
+          const matchingDiff = diffResult.diffs.find(d => {
+            if (d.location.startsWith('Left Line') && side === 'left' && d.location.includes(`Line ${lineNum}`)) return true
+            if (d.location.startsWith('Right Line') && side === 'right' && d.location.includes(`Line ${lineNum}`)) return true
+            if (d.location.startsWith('Line ') && d.location.includes(`Line ${lineNum}`)) return true
+            return false
+          })
           if (matchingDiff) {
             if (matchingDiff.level === 'WARNING') bgColor = 'yellow'
             else if (matchingDiff.level === 'ERROR') bgColor = 'orange'
@@ -484,8 +532,11 @@ function App() {
               <input type="file" onChange={(e) => handleFileUpload(e, 'left')} />
               <textarea
                 value={leftContent}
-                onChange={(e) => setLeftContent(e.target.value)}
-                placeholder="Paste or load left content..."
+                onChange={(e) => {
+                  setLeftContent(e.target.value)
+                  setLeftFileType(detectFileType(e.target.value))
+                }}
+                placeholder={leftFileType === 'json' ? "Paste or load JSON content..." : "Paste or load text content..."}
               />
               {diffResult && renderHighlightedPanel(leftContent, 'left')}
             </div>
@@ -494,8 +545,11 @@ function App() {
               <input type="file" onChange={(e) => handleFileUpload(e, 'right')} />
               <textarea
                 value={rightContent}
-                onChange={(e) => setRightContent(e.target.value)}
-                placeholder="Paste or load right content..."
+                onChange={(e) => {
+                  setRightContent(e.target.value)
+                  setRightFileType(detectFileType(e.target.value))
+                }}
+                placeholder={rightFileType === 'json' ? "Paste or load JSON content..." : "Paste or load text content..."}
               />
               {diffResult && renderHighlightedPanel(rightContent, 'right')}
             </div>
@@ -504,6 +558,16 @@ function App() {
             {loading ? 'Comparing...' : 'Compare'}
           </button>
           {diffResult && diffResult.error && <p style={{ color: 'red' }}>{diffResult.error}</p>}
+          {diffResult && !diffResult.identical && !diffResult.error && (
+            <div className="diff-summary">
+              <h3>Differences Found</h3>
+              <ul>
+                {diffResult.diffs.map((d, i) => (
+                  <li key={i}><strong>{d.location}</strong>: {d.level} - {d.desc}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </>
       )}
       {currentView === 'profile' && <Profile profile={profile} setProfile={setProfile} currentUser={currentUser} />}

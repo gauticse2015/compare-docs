@@ -3,6 +3,15 @@ import json
 import zipfile
 import xml.etree.ElementTree as ET
 from itertools import zip_longest
+import difflib
+
+def extract_line_number(location):
+    """Extract line number from location string."""
+    parts = location.split()
+    for part in parts:
+        if part.isdigit():
+            return int(part)
+    return 0
 
 def get_structured_diff(input1, input2, input_mode='path', file_type=None):
     """
@@ -28,15 +37,27 @@ def get_structured_diff(input1, input2, input_mode='path', file_type=None):
             elif file_type == 'json':
                 try:
                     with open(input1, 'r') as f:
-                        j1 = json.load(f)
+                        content1 = f.read()
+                        j1 = json.loads(content1)
                     with open(input2, 'r') as f:
-                        j2 = json.load(f)
+                        content2 = f.read()
+                        j2 = json.loads(content2)
                     if j1 == j2:
                         return {'identical': True, 'diffs': [], 'warnings': warnings}
                     else:
                         json_diffs = json_diff(j1, j2)
-                        for path, level, desc in json_diffs:
-                            diffs.append({'location': path, 'level': level, 'desc': desc})
+                        for path, level, desc, side in json_diffs:
+                            if side == 'file1':
+                                content = content1
+                            elif side == 'file2':
+                                content = content2
+                            else:
+                                content = content1
+                            lineno = find_line_for_path(content, path)
+                            location = f'Line {lineno}' if lineno else path
+                            diffs.append({'location': location, 'level': level, 'desc': desc})
+                        # Sort diffs by line number for better ordering
+                        diffs.sort(key=lambda d: extract_line_number(d['location']))
                         return {'identical': False, 'diffs': diffs, 'warnings': warnings}
                 except:
                     pass  # fallback
@@ -46,19 +67,29 @@ def get_structured_diff(input1, input2, input_mode='path', file_type=None):
                 lines1 = open_file_lines(input1)
                 lines2 = open_file_lines(input2)
         else:  # content mode, assume text or try json
-            if file_type == 'json':
-                try:
-                    j1 = json.loads(input1)
-                    j2 = json.loads(input2)
-                    if j1 == j2:
-                        return {'identical': True, 'diffs': [], 'warnings': warnings}
-                    else:
-                        json_diffs = json_diff(j1, j2)
-                        for path, level, desc in json_diffs:
-                            diffs.append({'location': path, 'level': level, 'desc': desc})
-                        return {'identical': False, 'diffs': diffs, 'warnings': warnings}
-                except:
-                    pass
+            # Try JSON first, regardless of file_type
+            try:
+                j1 = json.loads(input1)
+                j2 = json.loads(input2)
+                if j1 == j2:
+                    return {'identical': True, 'diffs': [], 'warnings': warnings}
+                else:
+                    json_diffs = json_diff(j1, j2)
+                    for path, level, desc, side in json_diffs:
+                        if side == 'file1':
+                            content = input1
+                        elif side == 'file2':
+                            content = input2
+                        else:
+                            content = input1
+                        lineno = find_line_for_path(content, path)
+                        location = f'Line {lineno}' if lineno else path
+                        diffs.append({'location': location, 'level': level, 'desc': desc})
+                    # Sort diffs by line number for better ordering
+                    diffs.sort(key=lambda d: extract_line_number(d['location']))
+                    return {'identical': False, 'diffs': diffs, 'warnings': warnings}
+            except:
+                pass  # not JSON, fallback to text
             # fallback to line-based (split content)
             lines1 = input1.splitlines(True)
             lines2 = input2.splitlines(True)
@@ -68,34 +99,60 @@ def get_structured_diff(input1, input2, input_mode='path', file_type=None):
         if lines1 == lines2:
             return {'identical': True, 'diffs': [], 'warnings': warnings}
         
-        for lineno, (l1, l2) in enumerate(zip_longest(lines1 or [], lines2 or []), 1):
-            if l1 is None:
-                diffs.append({'location': f'Line {lineno}', 'level': 'CRITICAL', 'desc': f'Extra content in file2: {l2.strip() if l2 else ""}'})
+        matcher = difflib.SequenceMatcher(None, lines1, lines2)
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            if tag == 'equal':
                 continue
-            if l2 is None:
-                diffs.append({'location': f'Line {lineno}', 'level': 'CRITICAL', 'desc': f'Extra content in file1: {l1.strip() if l1 else ""}'})
-                continue
-            l1_str = l1.rstrip('\n')
-            l2_str = l2.rstrip('\n')
-            if l1_str == l2_str:
-                continue
-            # Classify
-            indent1 = len(l1_str) - len(l1_str.lstrip()) if l1_str else 0
-            indent2 = len(l2_str) - len(l2_str.lstrip()) if l2_str else 0
-            strip1 = l1_str.strip()
-            strip2 = l2_str.strip()
-            if strip1 == strip2:
-                if indent1 != indent2:
-                    level = "ERROR"
-                    desc = f"indentation difference: {indent1} vs {indent2} spaces"
-                else:
-                    level = "WARNING"
-                    desc = f"whitespace/spaces difference: '{l1_str}' vs '{l2_str}'"
-            else:
-                level = "CRITICAL"
-                desc = f"content difference: '{l1_str.strip()}' vs '{l2_str.strip()}'"
-            diffs.append({'location': f'Line {lineno}', 'level': level, 'desc': desc})
+            elif tag == 'delete':
+                # lines i1 to i2 in lines1 are extra (missing in lines2)
+                for idx in range(i1, i2):
+                    lineno = idx + 1
+                    diffs.append({'location': f'Left Line {lineno}', 'level': 'CRITICAL', 'desc': f'Extra content in file1: {lines1[idx].strip()}'})
+            elif tag == 'insert':
+                # lines j1 to j2 in lines2 are extra (missing in lines1)
+                for idx in range(j1, j2):
+                    lineno = idx + 1
+                    diffs.append({'location': f'Right Line {lineno}', 'level': 'CRITICAL', 'desc': f'Extra content in file2: {lines2[idx].strip()}'})
+            elif tag == 'replace':
+                # compare the ranges
+                len_a = i2 - i1
+                len_b = j2 - j1
+                max_len = max(len_a, len_b)
+                for k in range(max_len):
+                    l1 = lines1[i1 + k] if k < len_a else None
+                    l2 = lines2[j1 + k] if k < len_b else None
+                    if l1 is None:
+                        lineno = j1 + k + 1
+                        diffs.append({'location': f'Right Line {lineno}', 'level': 'CRITICAL', 'desc': f'Extra content in file2: {l2.strip()}'})
+                        continue
+                    if l2 is None:
+                        lineno = i1 + k + 1
+                        diffs.append({'location': f'Left Line {lineno}', 'level': 'CRITICAL', 'desc': f'Extra content in file1: {l1.strip()}'})
+                        continue
+                    lineno = i1 + k + 1  # for both
+                    l1_str = l1.rstrip('\n')
+                    l2_str = l2.rstrip('\n')
+                    if l1_str == l2_str:
+                        continue
+                    # Classify
+                    indent1 = len(l1_str) - len(l1_str.lstrip()) if l1_str else 0
+                    indent2 = len(l2_str) - len(l2_str.lstrip()) if l2_str else 0
+                    strip1 = l1_str.strip()
+                    strip2 = l2_str.strip()
+                    if strip1 == strip2:
+                        if indent1 != indent2:
+                            level = "ERROR"
+                            desc = f"indentation difference: {indent1} vs {indent2} spaces"
+                        else:
+                            level = "WARNING"
+                            desc = f"whitespace/spaces difference: '{l1_str}' vs '{l2_str}'"
+                    else:
+                        level = "CRITICAL"
+                        desc = f"content difference: '{l1_str}' vs '{l2_str}'"
+                    diffs.append({'location': f'Line {lineno}', 'level': level, 'desc': desc})
         
+        # Sort diffs by line number for better ordering
+        diffs.sort(key=lambda d: extract_line_number(d['location']))
         return {'identical': False, 'diffs': diffs, 'warnings': warnings}
     except Exception as e:
         return {'identical': False, 'diffs': [], 'warnings': [str(e)], 'error': str(e)}
@@ -120,19 +177,30 @@ def extract_docx_text(path):
     except:
         return None
 
+def find_line_for_path(content, path):
+    if not path or path == "root":
+        return 1  # first line
+    last_key = path.split('/')[-1].split('[')[0]  # remove [index]
+    expected_indent = 2 + 2 * path.count('/')
+    lines = content.splitlines()
+    for i, line in enumerate(lines, 1):
+        if f'"{last_key}"' in line and line.startswith(' ' * expected_indent):
+            return i
+    return None
+
 def json_diff(d1, d2, path=""):
     diffs = []
     if type(d1) != type(d2):
-        diffs.append((path or "root", "CRITICAL", f"type mismatch: {type(d1)} vs {type(d2)}"))
+        diffs.append((path or "root", "CRITICAL", f"type mismatch: {type(d1)} vs {type(d2)}", "both"))
         return diffs
     if isinstance(d1, dict):
         all_keys = set(d1.keys()) | set(d2.keys())
         for k in all_keys:
             new_path = f"{path}/{k}" if path else k
             if k not in d1:
-                diffs.append((new_path, "CRITICAL", "missing in file1"))
+                diffs.append((new_path, "CRITICAL", "missing in file1", "file2"))
             elif k not in d2:
-                diffs.append((new_path, "CRITICAL", "missing in file2"))
+                diffs.append((new_path, "CRITICAL", "missing in file2", "file1"))
             else:
                 diffs.extend(json_diff(d1[k], d2[k], new_path))
     elif isinstance(d1, list):
@@ -140,13 +208,13 @@ def json_diff(d1, d2, path=""):
         for i in range(max_len):
             new_path = f"{path}[{i}]" if path else f"[{i}]"
             if i >= len(d1):
-                diffs.append((new_path, "CRITICAL", "missing in file1"))
+                diffs.append((new_path, "CRITICAL", "missing in file1", "file2"))
             elif i >= len(d2):
-                diffs.append((new_path, "CRITICAL", "missing in file2"))
+                diffs.append((new_path, "CRITICAL", "missing in file2", "file1"))
             else:
                 diffs.extend(json_diff(d1[i], d2[i], new_path))
     elif d1 != d2:
-        diffs.append((path or "root", "CRITICAL", f"value mismatch: {d1} vs {d2}"))
+        diffs.append((path or "root", "CRITICAL", f"value mismatch: {d1} vs {d2}", "both"))
     return diffs
 
 def compare_files(file1, file2):
