@@ -2,3 +2,6 @@ fastapi
 uvicorn
 python-multipart  # for file uploads if needed
 pydantic
+psycopg2-binary  # PostgreSQL driver
+sqlalchemy  # ORM for database interactions
+passlib[bcrypt]  # for password hashing

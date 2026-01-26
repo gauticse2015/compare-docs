@@ -1,1 +1,180 @@
-{}
+{
+  "gautamkumar72@gmail.com": [
+    {
+      "leftContent": "{\r\n    \"orderId\": \"ORD-20250122-8192\",\r\n    \"customer\": {\r\n      \"id\": \"CUST-39284\",\r\n      \"name\": \"Gautam Sharma\",\r\n      \"email\": \"gautam.sharma92@example.com\",\r\n      \"phone\": \"+91-98765-43210\"\r\n    },\r\n    \"orderDate\": \"2025-01-21T09:15:47Z\",\r\n    \"status\": \"shipped\",\r\n    \"shippingAddress\": {\r\n      \"line1\": \"Flat 704, Building A-3\",\r\n      \"line2\": \"Pimple Saudagar\",\r\n      \"city\": \"Pimpri-Chinchwad\",\r\n      \"state\": \"Maharashtra\",\r\n      \"pincode\": \"411027\",\r\n      \"country\": \"India\",\r\n      \"landmark\": \"Near D-Mart\"\r\n    },\r\n    \"items\": [\r\n      {\r\n        \"productId\": \"P1001\",\r\n        \"name\": \"Wireless Noise Cancelling Headphones\",\r\n        \"sku\": \"WH-ANC-2024-BLK\",\r\n        \"quantity\": 1,\r\n        \"unitPrice\": 3499.00,\r\n        \"discount\": 400.00,\r\n        \"subtotal\": 3099.00\r\n      },\r\n      {\r\n        \"productId\": \"P4156\",\r\n        \"name\": \"Smartwatch Fitness Tracker\",\r\n        \"sku\": \"SW-FT-2025-BLK\",\r\n        \"quantity\": 1,\r\n        \"unitPrice\": 2799.00,\r\n        \"discount\": 200.00,\r\n        \"subtotal\": 2599.00\r\n      },\r\n      {\r\n        \"productId\": \"P7892\",\r\n        \"name\": \"Type-C to Type-C Cable 2m\",\r\n        \"sku\": \"CAB-TC-TC-200\",\r\n        \"quantity\": 3,\r\n        \"unitPrice\": 399.00,\r\n        \"discount\": 0.00,\r\n        \"subtotal\": 1197.00\r\n      }\r\n    ],\r\n    \"payment\": {\r\n      \"method\": \"Credit Card\",\r\n      \"transactionId\": \"TXN-250121-987654\",\r\n      \"amountPaid\": 6895.00,\r\n      \"status\": \"completed\",\r\n      \"last4\": \"4242\"\r\n    },\r\n    \"totals\": {\r\n      \"subtotal\": 6895.00,\r\n      \"shipping\": 99.00,\r\n      \"tax\": 0.00,\r\n      \"discount\": 600.00,\r\n      \"grandTotal\": 6895.00\r\n    },\r\n    \"tracking\": {\r\n      \"courier\": \"Delhivery\",\r\n      \"trackingNumber\": \"DLV1234567890IN\"\r\n    }\r\n  }",
+      "rightContent": "{\r\n    \"orderId\": \"ORD-20250122-7841\",\r\n    \"customer\": {\r\n      \"id\": \"CUST-39284\",\r\n      \"name\": \"Gautam Sharma\",\r\n      \"email\": \"gautam.sharma92@example.com\",\r\n      \"phone\": \"+91-98765-43210\"\r\n    },\r\n    \"orderDate\": \"2025-01-20T14:35:22Z\",\r\n    \"status\": \"processing\",\r\n    \"shippingAddress\": {\r\n      \"line1\": \"Flat 704, Building A-3\",\r\n      \"line2\": \"Pimple Saudagar\",\r\n      \"city\": \"Pimpri-Chinchwad\",\r\n      \"state\": \"Maharashtra\",\r\n      \"pincode\": \"411027\",\r\n      \"country\": \"India\"\r\n    },\r\n    \"items\": [\r\n      {\r\n        \"productId\": \"P1001\",\r\n        \"name\": \"Wireless Noise Cancelling Headphones\",\r\n        \"sku\": \"WH-ANC-2024-BLK\",\r\n        \"quantity\": 1,\r\n        \"unitPrice\": 3499.00,\r\n        \"discount\": 400.00,\r\n        \"subtotal\": 3099.00\r\n      },\r\n      {\r\n        \"productId\": \"P2378\",\r\n        \"name\": \"USB-C 65W Fast Charger\",\r\n        \"sku\": \"CHR-65W-GaN\",\r\n        \"quantity\": 2,\r\n        \"unitPrice\": 1499.00,\r\n        \"discount\": 0.00,\r\n        \"subtotal\": 2998.00\r\n      }\r\n    ],\r\n    \"payment\": {\r\n      \"method\": \"UPI\",\r\n      \"transactionId\": \"UPI-250120-456789012\",\r\n      \"amountPaid\": 6097.00,\r\n      \"status\": \"completed\"\r\n    },\r\n    \"totals\": {\r\n      \"subtotal\": 6097.00,\r\n      \"shipping\": 0.00,\r\n      \"tax\": 0.00,\r\n      \"discount\": 400.00,\r\n      \"grandTotal\": 6097.00\r\n    },\r\n    \"notes\": \"Please deliver before 6 PM if possible\"\r\n  }",
+      "result": {
+        "identical": false,
+        "diffs": [
+          {
+            "location": "Line 2",
+            "level": "CRITICAL",
+            "desc": "content difference: '    \"orderId\": \"ORD-20250122-8192\",' vs '    \"orderId\": \"ORD-20250122-7841\",'"
+          },
+          {
+            "location": "Line 9",
+            "level": "CRITICAL",
+            "desc": "content difference: '    \"orderDate\": \"2025-01-21T09:15:47Z\",' vs '    \"orderDate\": \"2025-01-20T14:35:22Z\",'"
+          },
+          {
+            "location": "Line 10",
+            "level": "CRITICAL",
+            "desc": "content difference: '    \"status\": \"shipped\",' vs '    \"status\": \"processing\",'"
+          },
+          {
+            "location": "Line 17",
+            "level": "CRITICAL",
+            "desc": "content difference: '      \"country\": \"India\",' vs '      \"country\": \"India\"'"
+          },
+          {
+            "location": "Left Line 18",
+            "level": "CRITICAL",
+            "desc": "Extra content in file1: \"landmark\": \"Near D-Mart\""
+          },
+          {
+            "location": "Line 31",
+            "level": "CRITICAL",
+            "desc": "content difference: '        \"productId\": \"P4156\",' vs '        \"productId\": \"P2378\",'"
+          },
+          {
+            "location": "Line 32",
+            "level": "CRITICAL",
+            "desc": "content difference: '        \"name\": \"Smartwatch Fitness Tracker\",' vs '        \"name\": \"USB-C 65W Fast Charger\",'"
+          },
+          {
+            "location": "Line 33",
+            "level": "CRITICAL",
+            "desc": "content difference: '        \"sku\": \"SW-FT-2025-BLK\",' vs '        \"sku\": \"CHR-65W-GaN\",'"
+          },
+          {
+            "location": "Line 34",
+            "level": "CRITICAL",
+            "desc": "content difference: '        \"quantity\": 1,' vs '        \"quantity\": 2,'"
+          },
+          {
+            "location": "Line 35",
+            "level": "CRITICAL",
+            "desc": "content difference: '        \"unitPrice\": 2799.00,' vs '        \"unitPrice\": 1499.00,'"
+          },
+          {
+            "location": "Left Line 36",
+            "level": "CRITICAL",
+            "desc": "Extra content in file1: \"discount\": 200.00,"
+          },
+          {
+            "location": "Left Line 37",
+            "level": "CRITICAL",
+            "desc": "Extra content in file1: \"subtotal\": 2599.00"
+          },
+          {
+            "location": "Left Line 38",
+            "level": "CRITICAL",
+            "desc": "Extra content in file1: },"
+          },
+          {
+            "location": "Left Line 39",
+            "level": "CRITICAL",
+            "desc": "Extra content in file1: {"
+          },
+          {
+            "location": "Left Line 40",
+            "level": "CRITICAL",
+            "desc": "Extra content in file1: \"productId\": \"P7892\","
+          },
+          {
+            "location": "Left Line 41",
+            "level": "CRITICAL",
+            "desc": "Extra content in file1: \"name\": \"Type-C to Type-C Cable 2m\","
+          },
+          {
+            "location": "Left Line 42",
+            "level": "CRITICAL",
+            "desc": "Extra content in file1: \"sku\": \"CAB-TC-TC-200\","
+          },
+          {
+            "location": "Left Line 43",
+            "level": "CRITICAL",
+            "desc": "Extra content in file1: \"quantity\": 3,"
+          },
+          {
+            "location": "Left Line 44",
+            "level": "CRITICAL",
+            "desc": "Extra content in file1: \"unitPrice\": 399.00,"
+          },
+          {
+            "location": "Line 46",
+            "level": "CRITICAL",
+            "desc": "content difference: '        \"subtotal\": 1197.00' vs '        \"subtotal\": 2998.00'"
+          },
+          {
+            "location": "Line 50",
+            "level": "CRITICAL",
+            "desc": "content difference: '      \"method\": \"Credit Card\",' vs '      \"method\": \"UPI\",'"
+          },
+          {
+            "location": "Line 51",
+            "level": "CRITICAL",
+            "desc": "content difference: '      \"transactionId\": \"TXN-250121-987654\",' vs '      \"transactionId\": \"UPI-250120-456789012\",'"
+          },
+          {
+            "location": "Line 52",
+            "level": "CRITICAL",
+            "desc": "content difference: '      \"amountPaid\": 6895.00,' vs '      \"amountPaid\": 6097.00,'"
+          },
+          {
+            "location": "Line 53",
+            "level": "CRITICAL",
+            "desc": "content difference: '      \"status\": \"completed\",' vs '      \"status\": \"completed\"'"
+          },
+          {
+            "location": "Left Line 54",
+            "level": "CRITICAL",
+            "desc": "Extra content in file1: \"last4\": \"4242\""
+          },
+          {
+            "location": "Line 57",
+            "level": "CRITICAL",
+            "desc": "content difference: '      \"subtotal\": 6895.00,' vs '      \"subtotal\": 6097.00,'"
+          },
+          {
+            "location": "Line 58",
+            "level": "CRITICAL",
+            "desc": "content difference: '      \"shipping\": 99.00,' vs '      \"shipping\": 0.00,'"
+          },
+          {
+            "location": "Line 60",
+            "level": "CRITICAL",
+            "desc": "content difference: '      \"discount\": 600.00,' vs '      \"discount\": 400.00,'"
+          },
+          {
+            "location": "Line 61",
+            "level": "CRITICAL",
+            "desc": "content difference: '      \"grandTotal\": 6895.00' vs '      \"grandTotal\": 6097.00'"
+          },
+          {
+            "location": "Line 63",
+            "level": "CRITICAL",
+            "desc": "content difference: '    \"tracking\": {' vs '    \"notes\": \"Please deliver before 6 PM if possible\"'"
+          },
+          {
+            "location": "Left Line 64",
+            "level": "CRITICAL",
+            "desc": "Extra content in file1: \"courier\": \"Delhivery\","
+          },
+          {
+            "location": "Left Line 65",
+            "level": "CRITICAL",
+            "desc": "Extra content in file1: \"trackingNumber\": \"DLV1234567890IN\""
+          },
+          {
+            "location": "Left Line 66",
+            "level": "CRITICAL",
+            "desc": "Extra content in file1: }"
+          }
+        ],
+        "warnings": []
+      },
+      "timestamp": "2026-01-25T16:12:24.996Z"
+    }
+  ]
+}
