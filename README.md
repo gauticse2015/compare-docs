@@ -111,11 +111,35 @@ python -m src.compare_docs.core <file1> <file2>
 
 API docs: http://localhost:8000/docs (Swagger)
 
+## Syntax Check Feature
+The application includes a syntax checker for various programming languages:
+
+- **Supported Languages**: Python (multi-error detection), Java, JavaScript, JSON, XML, YAML
+- **API Endpoint**: POST /validate
+  ```json
+  {
+    "content": "code here",
+    "file_type": "python"
+  }
+  ```
+- **Response**:
+  ```json
+  {
+    "valid": false,
+    "errors": [
+      {"line": 5, "col": 10, "msg": "undefined name 'foo'"},
+      {"line": 12, "col": 1, "msg": "expected an indented block"}
+    ]
+  }
+  ```
+- **UI Access**: Navigate to "Syntax Check" in the React UI, paste/upload code, and check for errors.
+
 ## Features
 - Structured diffs with levels.
 - Supports multiple file types.
+- Syntax checking for programming languages (Python, Java, JavaScript, JSON, XML, YAML).
 - API for backend integration/deploy.
-- React UI (in /ui) similar to diffchecker.com.
+- React UI (in /ui) with compare and syntax check screens.
 
 ## Limitations
 - History contents are stored in local file storage. If the application is moved to a different machine or environment, previous histories may not be accessible due to file path dependencies. For production, consider migrating to cloud blob storage (e.g., AWS S3).

@@ -14,6 +14,10 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [histories, setHistories] = useState([])
   const [profile, setProfile] = useState({ name: '', email: '' })
+  const [syntaxContent, setSyntaxContent] = useState('')
+  const [syntaxFileType, setSyntaxFileType] = useState('text')
+  const [syntaxResult, setSyntaxResult] = useState(null)
+  const [syntaxFile, setSyntaxFile] = useState(null)
 
   useEffect(() => {
     const user = localStorage.getItem('currentUser')
@@ -22,7 +26,8 @@ function App() {
       setCurrentUser(parsedUser)
       setCurrentView('compare')
     } else {
-      setCurrentView('login')
+      // For debugging, start with compare
+      setCurrentView('compare')
     }
   }, [])
 
@@ -108,15 +113,14 @@ function App() {
         const fileType1 = detectFileType(leftContent)
         const fileType2 = detectFileType(rightContent)
         const fileType = fileType1 === fileType2 ? fileType1 : 'text'
+        const formData = new FormData()
+        formData.append('input1', leftContent)
+        formData.append('input2', rightContent)
+        formData.append('input_mode', 'content')
+        formData.append('file_type', fileType)
         response = await fetch('/api/compare', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            input1: leftContent,
-            input2: rightContent,
-            input_mode: 'content',
-            file_type: fileType
-          })
+          body: formData
         })
       }
       const result = await response.json()
@@ -148,6 +152,39 @@ function App() {
       setDiffResult({ error: 'Failed to compare' })
     }
     setLoading(false)
+  }
+
+  const handleSyntaxFileUpload = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      setSyntaxFile(file)
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        const content = event.target.result
+        setSyntaxContent(content)
+        const detectedType = detectFileType(content, file.name)
+        setSyntaxFileType(detectedType)
+      }
+      reader.readAsText(file)
+    }
+  }
+
+  const handleSyntaxCheck = async () => {
+    try {
+      const response = await fetch('/api/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: syntaxContent,
+          file_type: syntaxFileType
+        })
+      })
+      const result = await response.json()
+      setSyntaxResult(result)
+    } catch (error) {
+      console.error('Error:', error)
+      setSyntaxResult({ valid: false, errors: [{ line: 0, col: 0, msg: 'Failed to check syntax' }] })
+    }
   }
 
   const renderHighlightedPanel = (content, side) => {
@@ -486,6 +523,51 @@ function App() {
     )
   }
 
+  const SyntaxCheck = ({ content, setContent, fileType, setFileType, result, onCheck, onFileUpload }) => {
+    return (
+      <div className="syntax-check">
+        <h1>Syntax Check</h1>
+        <div className="controls">
+          <input type="file" onChange={onFileUpload} />
+          <select value={fileType} onChange={(e) => setFileType(e.target.value)}>
+            <option value="text">Text</option>
+            <option value="json">JSON</option>
+            <option value="python">Python</option>
+            <option value="java">Java</option>
+            <option value="xml">XML</option>
+            <option value="javascript">JavaScript</option>
+            <option value="yaml">YAML</option>
+          </select>
+          <button onClick={onCheck}>Check Syntax</button>
+        </div>
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="Paste your code here or upload a file..."
+        />
+        {result && (
+          <div className="result">
+            {result.valid ? (
+              <p className="valid">✅ Valid syntax</p>
+            ) : (
+              <div className="errors">
+                <p className="invalid">❌ Syntax errors found:</p>
+                <ul>
+                  {result.errors.map((error, idx) => (
+                    <li key={idx}>
+                      Line {error.line}, Column {error.col}: {error.msg}
+                    </li>
+                  ))}
+                </ul>
+                <p className="note">Note: Python reports multiple syntax errors. Other languages report the first error for efficiency. Fix errors and check again for additional issues.</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   const History = ({ histories }) => {
     return (
       <div className="history">
@@ -519,6 +601,7 @@ function App() {
     <div className="app">
       <nav className="nav">
         <button onClick={() => setCurrentView('compare')}>Compare</button>
+        <button onClick={() => setCurrentView('syntax')}>Syntax Check</button>
         <button onClick={() => setCurrentView('profile')}>Profile</button>
         <button onClick={() => setCurrentView('history')}>History</button>
         <button onClick={handleLogout}>Logout</button>
@@ -569,6 +652,17 @@ function App() {
             </div>
           )}
         </>
+      )}
+      {currentView === 'syntax' && (
+        <SyntaxCheck
+          content={syntaxContent}
+          setContent={setSyntaxContent}
+          fileType={syntaxFileType}
+          setFileType={setSyntaxFileType}
+          result={syntaxResult}
+          onCheck={handleSyntaxCheck}
+          onFileUpload={handleSyntaxFileUpload}
+        />
       )}
       {currentView === 'profile' && <Profile profile={profile} setProfile={setProfile} currentUser={currentUser} />}
       {currentView === 'history' && <History histories={histories} />}

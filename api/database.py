@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine, Column, Integer, String, TIMESTAMP, ForeignKey
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 import os
@@ -7,7 +7,7 @@ from passlib.context import CryptContext
 import datetime
 
 # Database URL - for local dev, use env var or default
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost/compare_docs")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./compare_docs.db")
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -36,7 +36,7 @@ class History(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     left_content_path = Column(String(255))
     right_content_path = Column(String(255))
-    result = Column(JSONB)
+    result = Column(JSON)
     timestamp = Column(TIMESTAMP)
 
     user = relationship("User", back_populates="histories")

@@ -10,6 +10,7 @@ users.json
 # Distribution / packaging
 .Python
 build/
+contents/
 develop-eggs/
 dist/
 downloads/

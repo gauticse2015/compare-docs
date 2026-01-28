@@ -1,7 +1,8 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Body, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, List, Dict
+import json
+from typing import Optional, List, Dict, Union
 import sys
 import os
 import json
@@ -13,7 +14,11 @@ from sqlalchemy.orm import Session
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from compare_docs import get_structured_diff
+from syntax_parser import parse_syntax
 from .database import get_db, User, History, hash_password, verify_password, create_tables
+
+# Create database tables
+create_tables()
 
 # Blob storage setup
 CONTENTS_DIR = "contents"
@@ -30,10 +35,11 @@ app.add_middleware(
 )
 
 class CompareRequest(BaseModel):
-    input1: Optional[str] = None
-    input2: Optional[str] = None
+    input1: Optional[Union[str, Dict]] = None
+    input2: Optional[Union[str, Dict]] = None
     input_mode: str = 'content'  # 'content' or 'path'
     file_type: Optional[str] = None
+    validate_syntax: bool = False
 
 class RegisterRequest(BaseModel):
     name: str
@@ -57,6 +63,10 @@ class HistoryItem(BaseModel):
 class SaveHistoryRequest(BaseModel):
     email: str
     history: HistoryItem
+
+class ValidateRequest(BaseModel):
+    content: str
+    file_type: str
 
 @app.post("/register")
 def register(user: RegisterRequest, db: Session = Depends(get_db)):
@@ -146,14 +156,17 @@ def get_history(email: str, db: Session = Depends(get_db)):
 
 @app.post("/compare")
 def compare_docs_api(
-    input1: Optional[str] = None,
-    input2: Optional[str] = None,
     file1: Optional[UploadFile] = File(None),
     file2: Optional[UploadFile] = File(None),
-    input_mode: str = 'content',
-    file_type: Optional[str] = None
+    input1: Optional[str] = Form(None),
+    input2: Optional[str] = Form(None),
+    input_mode: str = Form('content'),
+    file_type: Optional[str] = Form(None),
+    validate_syntax: bool = Form(False)
 ):
     try:
+        content1 = None
+        content2 = None
         if file1 and file2:
             # Save uploaded files to temp
             with tempfile.NamedTemporaryFile(delete=False) as temp1:
@@ -167,14 +180,39 @@ def compare_docs_api(
             finally:
                 os.unlink(temp1_path)
                 os.unlink(temp2_path)
-            return result
         elif input1 and input2:
-            result = get_structured_diff(input1, input2, input_mode='content', file_type=file_type)
-            return result
+            if isinstance(input1, dict):
+                input1 = json.dumps(input1)
+            if isinstance(input2, dict):
+                input2 = json.dumps(input2)
+            result = get_structured_diff(input1, input2, input_mode=input_mode, file_type=file_type)
         else:
             raise HTTPException(status_code=400, detail="Provide either files or content")
+        
+        if validate_syntax and file_type:
+            if file1 and file2:
+                # For files, we need to read content again, but since temp files are deleted, perhaps skip or read from files
+                # For simplicity, skip validation for uploaded files for now
+                pass
+            elif input1 and input2:
+                valid1, errors1 = parse_syntax(input1, file_type)
+                valid2, errors2 = parse_syntax(input2, file_type)
+                if not valid1:
+                    result['warnings'].append(f"Syntax errors in input1: {errors1}")
+                if not valid2:
+                    result['warnings'].append(f"Syntax errors in input2: {errors2}")
+        
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/validate")
+def validate_syntax(request: ValidateRequest):
+    try:
+        valid, errors = parse_syntax(request.content, request.file_type)
+        return {"valid": valid, "errors": errors}
+    except Exception as e:
+        return {"valid": False, "errors": [{"line": 0, "col": 0, "msg": str(e)}]}
 
 @app.get("/")
 def root():
