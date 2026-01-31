@@ -26,6 +26,24 @@ body {
   font-size: 2.5rem;
 }
 
+.file-type-selector {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.file-type-selector label {
+  margin-right: 10px;
+  font-weight: 500;
+}
+
+.file-type-selector select {
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: white;
+  font-size: 16px;
+}
+
 .panels {
   display: flex;
   justify-content: space-around;

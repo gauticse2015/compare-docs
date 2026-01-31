@@ -1,11 +1,18 @@
 import { useState, useEffect } from 'react'
 import './App.css'
+import mammoth from 'mammoth'
+import Login from './components/Login'
+import Profile from './components/Profile'
+import SyntaxCheck from './components/SyntaxCheck'
+import History from './components/History'
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null)
   const [currentView, setCurrentView] = useState('login')
   const [leftContent, setLeftContent] = useState('')
   const [rightContent, setRightContent] = useState('')
+  const [leftHtml, setLeftHtml] = useState('')
+  const [rightHtml, setRightHtml] = useState('')
   const [leftFile, setLeftFile] = useState(null)
   const [rightFile, setRightFile] = useState(null)
   const [leftFileType, setLeftFileType] = useState('text')
@@ -18,6 +25,13 @@ function App() {
   const [syntaxFileType, setSyntaxFileType] = useState('text')
   const [syntaxResult, setSyntaxResult] = useState(null)
   const [syntaxFile, setSyntaxFile] = useState(null)
+  const [fileType, setFileType] = useState('text')
+
+  const stripHtml = (html) => {
+    const tmp = document.createElement('DIV')
+    tmp.innerHTML = html
+    return tmp.textContent || tmp.innerText || ''
+  }
 
   useEffect(() => {
     const user = localStorage.getItem('currentUser')
@@ -42,6 +56,8 @@ function App() {
     }
   }, [currentUser])
 
+
+
   const handleLogin = (user) => {
     setCurrentUser(user)
     localStorage.setItem('currentUser', JSON.stringify(user))
@@ -62,25 +78,63 @@ function App() {
       } else {
         setRightFile(file)
       }
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        const content = event.target.result
-        const fileType = detectFileType(content, file.name)
+      if (file.name.toLowerCase().endsWith('.docx')) {
+        // Use mammoth to convert Docx to HTML
+        file.arrayBuffer().then(arrayBuffer => {
+          mammoth.convertToHtml({ arrayBuffer }).then(result => {
+            const html = result.value
+            const text = stripHtml(html)
+            if (side === 'left') {
+              setLeftContent(text)  // For diff
+              setLeftHtml(html)
+            } else {
+              setRightContent(text)
+              setRightHtml(html)
+            }
+          }).catch(err => {
+            console.error('Error converting Docx:', err)
+            if (side === 'left') {
+              setLeftContent('Error converting Docx')
+            } else {
+              setRightContent('Error converting Docx')
+            }
+          })
+        }).catch(err => {
+          console.error('Error reading file:', err)
+          if (side === 'left') {
+            setLeftContent('Error reading file')
+          } else {
+            setRightContent('Error reading file')
+          }
+        })
         if (side === 'left') {
-          setLeftContent(content)
-          setLeftFileType(fileType)
+          setLeftFile(file)
         } else {
-          setRightContent(content)
-          setRightFileType(fileType)
+          setRightFile(file)
         }
+      } else {
+        const reader = new FileReader()
+        reader.onload = (event) => {
+          const content = event.target.result
+          const fileType = detectFileType(content, file.name)
+          if (side === 'left') {
+            setLeftContent(content)
+            setLeftFileType(fileType)
+          } else {
+            setRightContent(content)
+            setRightFileType(fileType)
+          }
+        }
+        reader.readAsText(file)
       }
-      reader.readAsText(file)
     }
   }
 
   const detectFileType = (content, fileName = null) => {
-    if (fileName && fileName.endsWith('.json')) {
-      return 'json'
+    if (fileName) {
+      const lower = fileName.toLowerCase()
+      if (lower.endsWith('.json')) return 'json'
+      if (lower.endsWith('.docx')) return 'docx'
     }
     try {
       JSON.parse(content)
@@ -93,36 +147,15 @@ function App() {
   const handleCompare = async () => {
     setLoading(true)
     try {
-      let response
-      if (leftFile && rightFile) {
-        // Send files
-        const formData = new FormData()
-        formData.append('file1', leftFile)
-        formData.append('file2', rightFile)
-        formData.append('input_mode', 'path')
-        const fileType1 = detectFileType(leftContent)
-        const fileType2 = detectFileType(rightContent)
-        const fileType = fileType1 === fileType2 ? fileType1 : 'text'
-        formData.append('file_type', fileType)
-        response = await fetch('/api/compare', {
-          method: 'POST',
-          body: formData
-        })
-      } else {
-        // Send content
-        const fileType1 = detectFileType(leftContent)
-        const fileType2 = detectFileType(rightContent)
-        const fileType = fileType1 === fileType2 ? fileType1 : 'text'
-        const formData = new FormData()
-        formData.append('input1', leftContent)
-        formData.append('input2', rightContent)
-        formData.append('input_mode', 'content')
-        formData.append('file_type', fileType)
-        response = await fetch('/api/compare', {
-          method: 'POST',
-          body: formData
-        })
-      }
+      const formData = new FormData()
+      formData.append('input1', leftContent)
+      formData.append('input2', rightContent)
+      formData.append('input_mode', 'content')
+      formData.append('file_type', fileType)
+      const response = await fetch('/api/compare', {
+        method: 'POST',
+        body: formData
+      })
       const result = await response.json()
       setDiffResult(result)
       // Save to history
@@ -187,7 +220,11 @@ function App() {
     }
   }
 
-  const renderHighlightedPanel = (content, side) => {
+  const renderHighlightedPanel = (content, html, side) => {
+    if (html) {
+      // For HTML content, show HTML without highlighting for now
+      return <div dangerouslySetInnerHTML={{ __html: html }} />
+    }
     if (!diffResult || !diffResult.diffs) {
       return <pre>{content}</pre>
     }
@@ -218,380 +255,15 @@ function App() {
     )
   }
 
-  const EyeOpen = () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M1 12C1 12 5 4 12 4C19 4 23 12 23 12C23 12 19 20 12 20C5 20 1 12 1 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
-    </svg>
-  )
 
-  const EyeClosed = () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M2.99902 3L20.999 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M1 12C1 12 5 4 12 4C19 4 23 12 23 12C23 12 19 20 12 20C5 20 1 12 1 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
-    </svg>
-  )
 
-  const Login = ({ onLogin }) => {
-    const [currentView, setCurrentView] = useState('login')
-    const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' })
-    const [errors, setErrors] = useState({})
-    const [passwordVisible, setPasswordVisible] = useState(false)
-    const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false)
 
-    const validateForm = () => {
-      const newErrors = {}
-      if (currentView === 'signup') {
-        if (!form.name.trim()) newErrors.name = 'Name is required'
-        if (form.password.length < 6) newErrors.password = 'Password must be at least 6 characters'
-        if (!/[A-Z]/.test(form.password)) newErrors.password = 'Must contain uppercase letter'
-        if (!/[a-z]/.test(form.password)) newErrors.password = 'Must contain lowercase letter'
-        if (!/[0-9]/.test(form.password)) newErrors.password = 'Must contain number'
-        if (form.password !== form.confirmPassword) newErrors.confirmPassword = 'Passwords do not match'
-      }
-      if (!form.email.includes('@')) newErrors.email = 'Invalid email'
-      return newErrors
-    }
 
-    const handleSubmit = (e) => {
-      e.preventDefault()
-      const newErrors = validateForm()
-      if (Object.keys(newErrors).length > 0) {
-        setErrors(newErrors)
-        return
-      }
-      setErrors({})
-      if (currentView === 'signup') {
-        fetch('/api/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: form.name, email: form.email, password: form.password })
-        })
-        .then(res => res.json())
-        .then(data => {
-          if (data.message) {
-            handleLogin({ name: form.name, email: form.email })
-          } else {
-            setErrors({ general: data.detail || 'Error' })
-          }
-        })
-        .catch(err => setErrors({ general: 'Network error' }))
-      } else if (currentView === 'login') {
-        fetch('/api/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: form.email, password: form.password })
-        })
-        .then(res => res.json())
-        .then(data => {
-          if (data.user) {
-            handleLogin(data.user)
-          } else {
-            setErrors({ general: data.detail || 'Error' })
-          }
-        })
-        .catch(err => setErrors({ general: 'Network error' }))
-      } else if (currentView === 'forgot') {
-        if (form.password !== form.confirmPassword) {
-          setErrors({ confirmPassword: 'Passwords do not match' })
-          return
-        }
-        fetch('/api/reset-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: form.email, new_password: form.password })
-        })
-        .then(res => res.json())
-        .then(data => {
-          if (data.message) {
-            alert('Password reset successfully!')
-            setCurrentView('login')
-          } else {
-            setErrors({ email: data.detail || 'Error' })
-          }
-        })
-        .catch(err => setErrors({ general: 'Network error' }))
-      }
-    }
 
-    const renderForm = () => {
-      if (currentView === 'signup') {
-        return (
-          <>
-            <div className="input-group">
-              <input
-                placeholder="Full Name"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className={errors.name ? 'error' : ''}
-              />
-              {errors.name && <span className="error-text">{errors.name}</span>}
-            </div>
-            <div className="input-group">
-              <input
-                placeholder="Email"
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className={errors.email ? 'error' : ''}
-              />
-              {errors.email && <span className="error-text">{errors.email}</span>}
-            </div>
-            <div className="input-group password-group">
-              <input
-                placeholder="Password"
-                type={passwordVisible ? 'text' : 'password'}
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                className={errors.password ? 'error' : ''}
-              />
-              <button
-                type="button"
-                onClick={() => setPasswordVisible(!passwordVisible)}
-                className="password-toggle"
-              >
-                {passwordVisible ? <EyeClosed /> : <EyeOpen />}
-              </button>
-              {errors.password && <span className="error-text">{errors.password}</span>}
-            </div>
-            <div className="input-group password-group">
-              <input
-                placeholder="Confirm Password"
-                type={confirmPasswordVisible ? 'text' : 'password'}
-                value={form.confirmPassword}
-                onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
-                className={errors.confirmPassword ? 'error' : ''}
-              />
-              <button
-                type="button"
-                onClick={() => setConfirmPasswordVisible(!confirmPasswordVisible)}
-                className="password-toggle"
-              >
-                {confirmPasswordVisible ? <EyeClosed /> : <EyeOpen />}
-              </button>
-              {errors.confirmPassword && <span className="error-text">{errors.confirmPassword}</span>}
-            </div>
-            <button type="submit" className="signup-btn">Sign Up</button>
-            <button type="button" onClick={() => setCurrentView('login')} className="back-btn">
-              Already have an account? Log in
-            </button>
-          </>
-        )
-      } else if (currentView === 'forgot') {
-        return (
-          <>
-            <h2 className="forgot-title">Reset Password</h2>
-            <p className="forgot-subtitle">Enter your email and set a new password.</p>
-            <div className="input-group">
-              <input
-                placeholder="Email"
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className={errors.email ? 'error' : ''}
-              />
-              {errors.email && <span className="error-text">{errors.email}</span>}
-            </div>
-            <div className="input-group password-group">
-              <input
-                placeholder="New Password"
-                type={passwordVisible ? 'text' : 'password'}
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                className={errors.password ? 'error' : ''}
-              />
-              <button
-                type="button"
-                onClick={() => setPasswordVisible(!passwordVisible)}
-                className="password-toggle"
-              >
-                {passwordVisible ? <EyeClosed /> : <EyeOpen />}
-              </button>
-              {errors.password && <span className="error-text">{errors.password}</span>}
-            </div>
-            <div className="input-group password-group">
-              <input
-                placeholder="Confirm New Password"
-                type={confirmPasswordVisible ? 'text' : 'password'}
-                value={form.confirmPassword}
-                onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
-                className={errors.confirmPassword ? 'error' : ''}
-              />
-              <button
-                type="button"
-                onClick={() => setConfirmPasswordVisible(!confirmPasswordVisible)}
-                className="password-toggle"
-              >
-                {confirmPasswordVisible ? <EyeClosed /> : <EyeOpen />}
-              </button>
-              {errors.confirmPassword && <span className="error-text">{errors.confirmPassword}</span>}
-            </div>
-            <button type="submit" className="reset-btn">Reset Password</button>
-            <button type="button" onClick={() => setCurrentView('login')} className="back-btn">
-              Back to Login
-            </button>
-          </>
-        )
-      } else {
-        return (
-          <>
-            <div className="input-group">
-              <input
-                placeholder="Email"
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className={errors.email ? 'error' : ''}
-              />
-              {errors.email && <span className="error-text">{errors.email}</span>}
-            </div>
-            <div className="input-group password-group">
-              <input
-                placeholder="Password"
-                type={passwordVisible ? 'text' : 'password'}
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                className={errors.password ? 'error' : ''}
-              />
-              <button
-                type="button"
-                onClick={() => setPasswordVisible(!passwordVisible)}
-                className="password-toggle"
-              >
-                {passwordVisible ? <EyeClosed /> : <EyeOpen />}
-              </button>
-              {errors.password && <span className="error-text">{errors.password}</span>}
-            </div>
-            {errors.general && <span className="error-text general">{errors.general}</span>}
-            <button type="submit" className="login-btn">Log In</button>
-            <div className="forgot-link">
-              <button type="button" onClick={() => setCurrentView('forgot')} className="forgot-btn">
-                Forgot Password?
-              </button>
-            </div>
-            <button type="button" onClick={() => setCurrentView('signup')} className="signup-btn">
-              Create New Account
-            </button>
-          </>
-        )
-      }
-    }
 
-    return (
-      <div className="login-container">
-        <div className="login-card">
-          <div className="logo">
-            <h1>Compare Docs</h1>
-          </div>
-          <form onSubmit={handleSubmit} className="login-form">
-            {renderForm()}
-          </form>
-        </div>
-      </div>
-    )
-  }
 
-  const Profile = ({ profile, setProfile, currentUser }) => {
-    const [edit, setEdit] = useState(false)
-    const [tempProfile, setTempProfile] = useState(profile)
 
-    const handleSave = () => {
-      setProfile(tempProfile)
-      localStorage.setItem(`profile_${currentUser.email}`, JSON.stringify(tempProfile))
-      setEdit(false)
-    }
 
-    return (
-      <div className="profile">
-        <h2>Profile</h2>
-        {edit ? (
-          <div>
-            <input value={tempProfile.name} onChange={(e) => setTempProfile({ ...tempProfile, name: e.target.value })} placeholder="Name" />
-            <input value={tempProfile.email} onChange={(e) => setTempProfile({ ...tempProfile, email: e.target.value })} placeholder="Email" />
-            <button onClick={handleSave}>Save</button>
-            <button onClick={() => setEdit(false)}>Cancel</button>
-          </div>
-        ) : (
-          <div>
-            <p>Name: {profile.name}</p>
-            <p>Email: {profile.email}</p>
-            <button onClick={() => setEdit(true)}>Edit</button>
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  const SyntaxCheck = ({ content, setContent, fileType, setFileType, result, onCheck, onFileUpload }) => {
-    return (
-      <div className="syntax-check">
-        <h1>Syntax Check</h1>
-        <div className="controls">
-          <input type="file" onChange={onFileUpload} />
-          <select value={fileType} onChange={(e) => setFileType(e.target.value)}>
-            <option value="text">Text</option>
-            <option value="json">JSON</option>
-            <option value="python">Python</option>
-            <option value="java">Java</option>
-            <option value="xml">XML</option>
-            <option value="javascript">JavaScript</option>
-            <option value="yaml">YAML</option>
-          </select>
-          <button onClick={onCheck}>Check Syntax</button>
-        </div>
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="Paste your code here or upload a file..."
-        />
-        {result && (
-          <div className="result">
-            {result.valid ? (
-              <p className="valid">✅ Valid syntax</p>
-            ) : (
-              <div className="errors">
-                <p className="invalid">❌ Syntax errors found:</p>
-                <ul>
-                  {result.errors.map((error, idx) => (
-                    <li key={idx}>
-                      Line {error.line}, Column {error.col}: {error.msg}
-                    </li>
-                  ))}
-                </ul>
-                <p className="note">Note: Python reports multiple syntax errors. Other languages report the first error for efficiency. Fix errors and check again for additional issues.</p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  const History = ({ histories }) => {
-    return (
-      <div className="history">
-        <h2>History</h2>
-        {histories.length === 0 && <p>No history yet.</p>}
-        {histories.map(h => (
-          <div key={h.id} className="history-item">
-            <p>{new Date(h.timestamp).toLocaleString()}</p>
-            <details>
-              <summary>View Comparison</summary>
-              <div>
-                <h4>Left</h4>
-                <pre>{h.leftContent}</pre>
-                <h4>Right</h4>
-                <pre>{h.rightContent}</pre>
-                <h4>Result</h4>
-                <pre>{JSON.stringify(h.result, null, 2)}</pre>
-              </div>
-            </details>
-          </div>
-        ))}
-      </div>
-    )
-  }
 
   if (currentView === 'login') {
     return <Login onLogin={handleLogin} />
@@ -609,6 +281,14 @@ function App() {
       {currentView === 'compare' && (
         <>
           <h1>Compare Docs</h1>
+          <div className="file-type-selector">
+            <label>File Type: </label>
+            <select value={fileType} onChange={(e) => setFileType(e.target.value)}>
+              <option value="text">Text</option>
+              <option value="json">JSON</option>
+              <option value="docx">Docx</option>
+            </select>
+          </div>
           <div className="panels">
             <div className="panel">
               <h2>Left / Original</h2>
@@ -621,7 +301,7 @@ function App() {
                 }}
                 placeholder={leftFileType === 'json' ? "Paste or load JSON content..." : "Paste or load text content..."}
               />
-              {diffResult && renderHighlightedPanel(leftContent, 'left')}
+              {diffResult && renderHighlightedPanel(leftContent, leftHtml, 'left')}
             </div>
             <div className="panel">
               <h2>Right / Modified</h2>
@@ -634,7 +314,7 @@ function App() {
                 }}
                 placeholder={rightFileType === 'json' ? "Paste or load JSON content..." : "Paste or load text content..."}
               />
-              {diffResult && renderHighlightedPanel(rightContent, 'right')}
+              {diffResult && renderHighlightedPanel(rightContent, rightHtml, 'right')}
             </div>
           </div>
           <button onClick={handleCompare} disabled={loading}>

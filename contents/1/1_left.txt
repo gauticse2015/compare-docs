@@ -1,1 +1,67 @@
-hello
+{
+    "orderId": "ORD-20250122-8192",
+    "customer": {
+      "id": "CUST-39284",
+      "name": "Gautam Sharma",
+      "email": "gautam.sharma92@example.com",
+      "phone": "+91-98765-43210"
+    },
+    "orderDate": "2025-01-21T09:15:47Z",
+    "status": "shipped",
+    "shippingAddress": {
+      "line1": "Flat 704, Building A-3",
+      "line2": "Pimple Saudagar",
+      "city": "Pimpri-Chinchwad",
+      "state": "Maharashtra",
+      "pincode": "411027",
+      "country": "India",
+      "landmark": "Near D-Mart"
+    },
+    "items": [
+      {
+        "productId": "P1001",
+        "name": "Wireless Noise Cancelling Headphones",
+        "sku": "WH-ANC-2024-BLK",
+        "quantity": 1,
+        "unitPrice": 3499.00,
+        "discount": 400.00,
+        "subtotal": 3099.00
+      },
+      {
+        "productId": "P4156",
+        "name": "Smartwatch Fitness Tracker",
+        "sku": "SW-FT-2025-BLK",
+        "quantity": 1,
+        "unitPrice": 2799.00,
+        "discount": 200.00,
+        "subtotal": 2599.00
+      },
+      {
+        "productId": "P7892",
+        "name": "Type-C to Type-C Cable 2m",
+        "sku": "CAB-TC-TC-200",
+        "quantity": 3,
+        "unitPrice": 399.00,
+        "discount": 0.00,
+        "subtotal": 1197.00
+      }
+    ],
+    "payment": {
+      "method": "Credit Card",
+      "transactionId": "TXN-250121-987654",
+      "amountPaid": 6895.00,
+      "status": "completed",
+      "last4": "4242"
+    },
+    "totals": {
+      "subtotal": 6895.00,
+      "shipping": 99.00,
+      "tax": 0.00,
+      "discount": 600.00,
+      "grandTotal": 6895.00
+    },
+    "tracking": {
+      "courier": "Delhivery",
+      "trackingNumber": "DLV1234567890IN"
+    }
+  }

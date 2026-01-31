@@ -6,3 +6,4 @@ psycopg2-binary  # PostgreSQL driver
 sqlalchemy  # ORM for database interactions
 passlib[bcrypt]  # for password hashing
 pyflakes
+python-docx

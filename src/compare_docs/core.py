@@ -4,6 +4,7 @@ import zipfile
 import xml.etree.ElementTree as ET
 from itertools import zip_longest
 import difflib
+from docx import Document
 
 def extract_line_number(location):
     """Extract line number from location string."""
@@ -12,6 +13,71 @@ def extract_line_number(location):
         if part.isdigit():
             return int(part)
     return 0
+
+def compare_docx_files(path1, path2):
+    """
+    Compare two Docx files by extracting text and doing line-based diff for consistency with UI highlighting.
+    """
+    text1 = extract_docx_text(path1)
+    text2 = extract_docx_text(path2)
+    diffs = []
+    if text1 is None or text2 is None:
+        diffs.append({'location': 'File', 'level': 'CRITICAL', 'desc': 'Failed to extract text from Docx file'})
+        return diffs
+
+    lines1 = text1 if isinstance(text1, list) else text1.splitlines(True)
+    lines2 = text2 if isinstance(text2, list) else text2.splitlines(True)
+
+    # Line-based compare
+    matcher = difflib.SequenceMatcher(None, lines1, lines2)
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == 'equal':
+            continue
+        elif tag == 'delete':
+            for idx in range(i1, i2):
+                lineno = idx + 1
+                diffs.append({'location': f'Left Line {lineno}', 'level': 'CRITICAL', 'desc': f'Extra content in file1: {lines1[idx].strip()}'})
+        elif tag == 'insert':
+            for idx in range(j1, j2):
+                lineno = idx + 1
+                diffs.append({'location': f'Right Line {lineno}', 'level': 'CRITICAL', 'desc': f'Extra content in file2: {lines2[idx].strip()}'})
+        elif tag == 'replace':
+            len_a = i2 - i1
+            len_b = j2 - j1
+            max_len = max(len_a, len_b)
+            for k in range(max_len):
+                l1 = lines1[i1 + k] if k < len_a else None
+                l2 = lines2[j1 + k] if k < len_b else None
+                if l1 is None:
+                    lineno = j1 + k + 1
+                    diffs.append({'location': f'Right Line {lineno}', 'level': 'CRITICAL', 'desc': f'Extra content in file2: {l2.strip()}'})
+                    continue
+                if l2 is None:
+                    lineno = i1 + k + 1
+                    diffs.append({'location': f'Left Line {lineno}', 'level': 'CRITICAL', 'desc': f'Extra content in file1: {l1.strip()}'})
+                    continue
+                lineno = i1 + k + 1
+                l1_str = l1.rstrip('\n')
+                l2_str = l2.rstrip('\n')
+                if l1_str == l2_str:
+                    continue
+                indent1 = len(l1_str) - len(l1_str.lstrip()) if l1_str else 0
+                indent2 = len(l2_str) - len(l2_str.lstrip()) if l2_str else 0
+                strip1 = l1_str.strip()
+                strip2 = l2_str.strip()
+                if strip1 == strip2:
+                    if indent1 != indent2:
+                        level = "ERROR"
+                        desc = f"indentation difference: {indent1} vs {indent2} spaces"
+                    else:
+                        level = "WARNING"
+                        desc = f"whitespace/spaces difference: '{l1_str}' vs '{l2_str}'"
+                else:
+                    level = "CRITICAL"
+                    desc = f"content difference: '{l1_str}' vs '{l2_str}'"
+                diffs.append({'location': f'Line {lineno}', 'level': level, 'desc': desc})
+
+    return diffs
 
 def get_structured_diff(input1, input2, input_mode='path', file_type=None):
     """
@@ -32,8 +98,9 @@ def get_structured_diff(input1, input2, input_mode='path', file_type=None):
             
             # Load data
             if file_type == 'docx':
-                lines1 = extract_docx_text(input1) or open_file_lines(input1)
-                lines2 = extract_docx_text(input2) or open_file_lines(input2)
+                diffs = compare_docx_files(input1, input2)
+                identical = len(diffs) == 0
+                return {'identical': identical, 'diffs': diffs, 'warnings': warnings}
             elif file_type == 'json':
                 try:
                     with open(input1, 'r') as f:

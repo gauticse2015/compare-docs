@@ -206,6 +206,32 @@ def compare_docs_api(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/extract-docx-text")
+def extract_docx_text(file: UploadFile = File(...)):
+    try:
+        import zipfile
+        import xml.etree.ElementTree as ET
+        from xml.etree.ElementTree import QName
+        with zipfile.ZipFile(file.file) as z:
+            with z.open('word/document.xml') as f:
+                tree = ET.parse(f)
+                text = []
+                for elem in tree.iter():
+                    # Check for images/charts
+                    if elem.tag.endswith('drawing'):
+                        text.append('[Image/Chart]\n')
+                    elif elem.tag.endswith('pict'):
+                        text.append('[Picture]\n')
+                    elif elem.tag.endswith('checkbox'):
+                        text.append('[Checkbox]\n')
+                    elif elem.tag.endswith('chart'):
+                        text.append('[Chart]\n')
+                    elif elem.text and elem.text.strip():
+                        text.append(elem.text.strip() + '\n')
+                return {"text": ''.join(text)}
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.post("/validate")
 def validate_syntax(request: ValidateRequest):
     try:
