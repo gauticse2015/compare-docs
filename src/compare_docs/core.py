@@ -233,15 +233,61 @@ def open_file_lines(file_path):
 
 def extract_docx_text(path):
     try:
-        with zipfile.ZipFile(path) as z:
-            with z.open('word/document.xml') as f:
-                tree = ET.parse(f)
-                text = []
-                for elem in tree.iter():
-                    if elem.text and elem.text.strip():
-                        text.append(elem.text + '\n')
-                return text
-    except:
+        doc = Document(path)
+        text = []
+        images = []
+        charts = []
+        for shape in doc.inline_shapes:
+            if shape.type == 3:  # picture
+                name = getattr(shape._inline, 'docPr', None)
+                if name:
+                    name = name.name
+                else:
+                    name = 'Unknown'
+                images.append(name)
+            elif shape.type == 5:  # chart
+                name = getattr(shape._inline, 'docPr', None)
+                if name:
+                    name = name.name
+                else:
+                    name = 'Unknown'
+                charts.append(name)
+        for para in doc.paragraphs:
+            para_text = ''
+            style_name = para.style.name if para.style else 'Normal'
+            if style_name.lower() != 'normal':
+                para_text += f'[{style_name}] '
+            alignment = para.alignment
+            if alignment:
+                para_text += f'[align:{alignment}] '
+            for run in para.runs:
+                run_styles = []
+                if run.bold:
+                    run_styles.append('bold')
+                if run.italic:
+                    run_styles.append('italic')
+                if run.underline:
+                    run_styles.append('underline')
+                if run.font.color and run.font.color.rgb:
+                    run_styles.append(f'color:{run.font.color.rgb}')
+                if run.font.size:
+                    run_styles.append(f'size:{run.font.size.pt}pt')
+                if run.font.name:
+                    run_styles.append(f'font:{run.font.name}')
+                # Add more if needed
+                if run_styles:
+                    para_text += f'[{"; ".join(run_styles)}]{run.text}[/style]'
+                else:
+                    para_text += run.text
+            if para_text.strip():
+                text.append(para_text + '\n')
+        if images:
+            text.append(f'[Images: {", ".join(images)}]\n')
+        if charts:
+            text.append(f'[Charts: {", ".join(charts)}]\n')
+        return text
+    except Exception as e:
+        print(f"Error extracting docx: {e}")
         return None
 
 def find_line_for_path(content, path):

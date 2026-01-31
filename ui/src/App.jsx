@@ -33,6 +33,97 @@ function App() {
     return tmp.textContent || tmp.innerText || ''
   }
 
+  const parseStyledText = (text) => {
+    const lines = text.split('\n')
+    return lines.map((line, idx) => {
+      if (line.startsWith('[Images:')) {
+        const images = line.slice(9, -2).split(', ')
+        return (
+          <div key={idx} style={{ margin: '10px 0', padding: '10px', border: '1px solid #ccc', borderRadius: '4px' }}>
+            <strong>Images:</strong>
+            <ul>
+              {images.map((img, i) => <li key={i}>📷 {img}</li>)}
+            </ul>
+          </div>
+        )
+      } else if (line.startsWith('[Charts:')) {
+        const charts = line.slice(9, -2).split(', ')
+        return (
+          <div key={idx} style={{ margin: '10px 0', padding: '10px', border: '1px solid #ccc', borderRadius: '4px' }}>
+            <strong>Charts:</strong>
+            <ul>
+              {charts.map((chart, i) => <li key={i}>📊 {chart}</li>)}
+            </ul>
+          </div>
+        )
+      }
+      let paraStyle = {}
+      let paraTag = 'p'
+      let align = null
+      if (line.startsWith('[Title]')) {
+        paraTag = 'h1'
+        line = line.slice(7)
+      } else if (line.startsWith('[Heading 1]')) {
+        paraTag = 'h1'
+        line = line.slice(11)
+      } else if (line.startsWith('[Heading 2]')) {
+        paraTag = 'h2'
+        line = line.slice(11)
+      }
+      // Check for alignment
+      if (line.startsWith('[align:')) {
+        const end = line.indexOf('] ')
+        if (end > 6) {
+          align = line.slice(7, end)
+          line = line.slice(end + 2)
+        }
+      }
+      if (align === 0) paraStyle.textAlign = 'left'
+      else if (align === 1) paraStyle.textAlign = 'center'
+      else if (align === 2) paraStyle.textAlign = 'right'
+      else if (align === 3) paraStyle.textAlign = 'justify'
+
+      const elements = []
+      let currentText = ''
+      let i = 0
+      while (i < line.length) {
+        if (line.startsWith('[/style]', i)) {
+          elements.push(currentText)
+          currentText = ''
+          i += 8
+        } else if (line[i] === '[' && line.indexOf(']', i) > i) {
+          const end = line.indexOf(']', i)
+          const styleStr = line.slice(i + 1, end)
+          elements.push(currentText)
+          currentText = ''
+          const style = {}
+          styleStr.split('; ').forEach(s => {
+            if (s === 'bold') style.fontWeight = 'bold'
+            else if (s === 'italic') style.fontStyle = 'italic'
+            else if (s === 'underline') style.textDecoration = 'underline'
+            else if (s.startsWith('color:')) style.color = '#' + s.slice(6)
+            else if (s.startsWith('size:')) style.fontSize = s.slice(5) + 'pt'
+            else if (s.startsWith('font:')) style.fontFamily = s.slice(5)
+          })
+          i = end + 1
+          let textStart = i
+          const endStyle = line.indexOf('[/style]', i)
+          if (endStyle > i) {
+            const runText = line.slice(i, endStyle)
+            elements.push(<span key={`${idx}-${elements.length}`} style={style}>{runText}</span>)
+            i = endStyle
+          }
+        } else {
+          currentText += line[i]
+          i++
+        }
+      }
+      elements.push(currentText)
+      const ParaTag = paraTag
+      return <ParaTag key={idx} style={paraStyle}>{elements}</ParaTag>
+    })
+  }
+
   useEffect(() => {
     const user = localStorage.getItem('currentUser')
     if (user) {
@@ -47,7 +138,7 @@ function App() {
 
   useEffect(() => {
     if (currentUser) {
-      fetch(`/api/get-history?email=${encodeURIComponent(currentUser.email)}`)
+      fetchWithRetry(`/api/get-history?email=${encodeURIComponent(currentUser.email)}`)
         .then(res => res.json())
         .then(h => setHistories(h))
         .catch(err => console.error('Error loading history:', err))
@@ -79,7 +170,7 @@ function App() {
         setRightFile(file)
       }
       if (file.name.toLowerCase().endsWith('.docx')) {
-        // Use mammoth to convert Docx to HTML
+        // Use mammoth to convert to HTML with images
         file.arrayBuffer().then(arrayBuffer => {
           mammoth.convertToHtml({ arrayBuffer }).then(result => {
             const html = result.value
@@ -144,6 +235,19 @@ function App() {
     }
   }
 
+  const fetchWithRetry = async (url, options, retries = 3, delay = 1000) => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const response = await fetch(url, options)
+        return response
+      } catch (error) {
+        if (i === retries - 1) throw error
+        console.log(`Retry ${i + 1} for ${url}`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    }
+  }
+
   const handleCompare = async () => {
     setLoading(true)
     try {
@@ -152,7 +256,7 @@ function App() {
       formData.append('input2', rightContent)
       formData.append('input_mode', 'content')
       formData.append('file_type', fileType)
-      const response = await fetch('/api/compare', {
+      const response = await fetchWithRetry('/api/compare', {
         method: 'POST',
         body: formData
       })
@@ -166,7 +270,7 @@ function App() {
           result,
           timestamp: new Date().toISOString()
         }
-        fetch('/api/save-history', {
+        fetchWithRetry('/api/save-history', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -182,7 +286,7 @@ function App() {
       }
     } catch (error) {
       console.error('Error:', error)
-      setDiffResult({ error: 'Failed to compare' })
+      setDiffResult({ error: 'Failed to compare - Backend not available. Please try again.' })
     }
     setLoading(false)
   }
@@ -204,7 +308,7 @@ function App() {
 
   const handleSyntaxCheck = async () => {
     try {
-      const response = await fetch('/api/validate', {
+      const response = await fetchWithRetry('/api/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -216,13 +320,12 @@ function App() {
       setSyntaxResult(result)
     } catch (error) {
       console.error('Error:', error)
-      setSyntaxResult({ valid: false, errors: [{ line: 0, col: 0, msg: 'Failed to check syntax' }] })
+      setSyntaxResult({ valid: false, errors: [{ line: 0, col: 0, msg: 'Failed to check syntax - Backend not available.' }] })
     }
   }
 
-  const renderHighlightedPanel = (content, html, side) => {
-    if (html) {
-      // For HTML content, show HTML without highlighting for now
+  const renderHighlightedPanel = (content, html, side, fileType) => {
+    if (fileType === 'docx' && html) {
       return <div dangerouslySetInnerHTML={{ __html: html }} />
     }
     if (!diffResult || !diffResult.diffs) {
@@ -293,29 +396,39 @@ function App() {
             <div className="panel">
               <h2>Left / Original</h2>
               <input type="file" onChange={(e) => handleFileUpload(e, 'left')} />
-              <textarea
-                value={leftContent}
-                onChange={(e) => {
-                  setLeftContent(e.target.value)
-                  setLeftFileType(detectFileType(e.target.value))
-                }}
-                placeholder={leftFileType === 'json' ? "Paste or load JSON content..." : "Paste or load text content..."}
-              />
-              {diffResult && renderHighlightedPanel(leftContent, leftHtml, 'left')}
+              {leftFileType !== 'docx' && (
+                <textarea
+                  value={leftContent}
+                  onChange={(e) => {
+                    setLeftContent(e.target.value)
+                    setLeftFileType(detectFileType(e.target.value))
+                  }}
+                  placeholder={leftFileType === 'json' ? "Paste or load JSON content..." : "Paste or load text content..."}
+                />
+              )}
+              {renderHighlightedPanel(leftContent, leftHtml, 'left', leftFileType)}
             </div>
             <div className="panel">
               <h2>Right / Modified</h2>
               <input type="file" onChange={(e) => handleFileUpload(e, 'right')} />
-              <textarea
-                value={rightContent}
-                onChange={(e) => {
-                  setRightContent(e.target.value)
-                  setRightFileType(detectFileType(e.target.value))
-                }}
-                placeholder={rightFileType === 'json' ? "Paste or load JSON content..." : "Paste or load text content..."}
-              />
-              {diffResult && renderHighlightedPanel(rightContent, rightHtml, 'right')}
+              {rightFileType !== 'docx' && (
+                <textarea
+                  value={rightContent}
+                  onChange={(e) => {
+                    setRightContent(e.target.value)
+                    setRightFileType(detectFileType(e.target.value))
+                  }}
+                  placeholder={rightFileType === 'json' ? "Paste or load JSON content..." : "Paste or load text content..."}
+                />
+              )}
+              {renderHighlightedPanel(rightContent, rightHtml, 'right', rightFileType)}
             </div>
+            {loading && (
+              <div className="loading-overlay">
+                <div className="spinner"></div>
+                <p>Comparing documents...</p>
+              </div>
+            )}
           </div>
           <button onClick={handleCompare} disabled={loading}>
             {loading ? 'Comparing...' : 'Compare'}
